@@ -56,114 +56,114 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	 *   3. Return exit status
 	 */
 
-    if (strcmp(s->verb->string, "exit") == 0) {
-        return shell_exit();
-    }
+	if (strcmp(s->verb->string, "exit") == 0) {
+		return shell_exit();
+	}
 
-    if (strcmp(s->verb->string, "cd") == 0) {
-        
-        if (!s->params) {
-            return 0;
-        }
+	if (strcmp(s->verb->string, "cd") == 0) {
 
-        if (s->out) {
-            int fd;
-            if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND) {
-                fd = open(s->out->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-            } else {
-                fd = open(s->out->string, O_WRONLY | O_APPEND, 0666);
-            }
-            close(fd);
-        }
+		if (!s->params) {
+			return 0;
+		}
 
-        int fd = 3;
+		if (s->out) {
+			int fd;
+			if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND) {
+				fd = open(s->out->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+			} else {
+				fd = open(s->out->string, O_WRONLY | O_APPEND, 0666);
+			}
+			close(fd);
+		}
 
-        if (s->err) {
+		int fd = 3;
 
-            if ((s->io_flags & IO_ERR_APPEND) != IO_ERR_APPEND) {
-                fd = open(s->err->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-            } else {
-                fd = open(s->err->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
-            }
-        }
+		if (s->err) {
 
-        return shell_cd(s->params);
-    }
+			if ((s->io_flags & IO_ERR_APPEND) != IO_ERR_APPEND) {
+				fd = open(s->err->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+			} else {
+				fd = open(s->err->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
+			}
+		}
 
-    char *command = get_word(s->verb);
+		return shell_cd(s->params);
+	}
 
-    if (strchr(command, '=')) {
+	char *command = get_word(s->verb);
 
-        char *word = get_word(s->verb->next_part->next_part);
-        setenv(s->verb->string, word, 1);
-        free(word);
-        free(command);
-        return 0;
-    }
+	if (strchr(command, '=')) {
 
-    free(command);
+		char *word = get_word(s->verb->next_part->next_part);
+		setenv(s->verb->string, word, 1);
+		free(word);
+		free(command);
+		return 0;
+	}
 
-    int childpid = fork();
-    int ret;
+	free(command);
 
-    int size = 0;
-    char **argv = get_argv(s, &size);
+	int childpid = fork();
+	int ret;
 
-    if (childpid == 0) {
-        
-        if (s->out) {
-            int fd;
-            if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND) {
-                fd = open(s->out->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-            } else {
-                fd = open(s->out->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
-            }
+	int size = 0;
+	char **argv = get_argv(s, &size);
 
-            dup2(fd, 1);
-            close(fd);
-        }
+	if (childpid == 0) {
 
-        if (s->in) {
-            int fd = open(s->in->string, O_RDONLY, 0666);
+		if (s->out) {
+			int fd;
+			if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND) {
+				fd = open(s->out->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+			} else {
+				fd = open(s->out->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
+			}
 
-            dup2(fd, 0);
-            close(fd);
-        }
+			dup2(fd, 1);
+			close(fd);
+		}
 
-        if (s->err) {
-            int fd;
+		if (s->in) {
+			int fd = open(s->in->string, O_RDONLY, 0666);
 
-            if (s->out != NULL && strcmp(s->out->string, s->err->string) == 0) {
-                fd = 1;
-            } else if ((s->io_flags & IO_ERR_APPEND) != IO_ERR_APPEND) {
-                fd = open(s->err->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-            } else {
-                fd = open(s->err->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
-            }
+			dup2(fd, 0);
+			close(fd);
+		}
 
-            dup2(fd, 2);
+		if (s->err) {
+			int fd;
 
-            if (!(s->out != NULL && strcmp(s->out->string, s->err->string) == 0)) {
-                close(fd);
-            }
-        }
+			if (s->out != NULL && strcmp(s->out->string, s->err->string) == 0) {
+				fd = 1;
+			} else if ((s->io_flags & IO_ERR_APPEND) != IO_ERR_APPEND) {
+				fd = open(s->err->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+			} else {
+				fd = open(s->err->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
+			}
 
-        execvp(s->verb->string, argv);
-    } else {
-        int status;
-        waitpid(childpid, &status, 0);
+			dup2(fd, 2);
 
-        if (WIFEXITED(status))
-            ret = WEXITSTATUS(status);
+			if (!(s->out != NULL && strcmp(s->out->string, s->err->string) == 0)) {
+				close(fd);
+			}
+		}
 
-        for (int i = 0; i < size; i++) {
-            free(argv[i]);
-        }
+		execvp(s->verb->string, argv);
+	} else {
+		int status;
+		waitpid(childpid, &status, 0);
 
-        free(argv);
-    }
+		if (WIFEXITED(status))
+			ret = WEXITSTATUS(status);
 
-    return ret;
+		for (int i = 0; i < size; i++) {
+			free(argv[i]);
+		}
+
+		free(argv);
+	}
+
+	return ret;
 }
 
 /**
@@ -194,21 +194,21 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 int parse_command(command_t *c, int level, command_t *father)
 {
 	/* TODO: sanity checks */
-    int ret;
+	int ret;
 
 	if (c->op == OP_NONE) {
 		/* TODO: Execute a simple command. */
 		ret = parse_simple(c->scmd, level, father);
-        return ret;
+		return ret;
 	}
 
 	switch (c->op) {
 	case OP_SEQUENTIAL:
 		/* TODO: Execute the commands one after the other. */
 
-        parse_command(c->cmd1, level + 1, c);
+		parse_command(c->cmd1, level + 1, c);
 
-        ret = parse_command(c->cmd2, level + 1, father);
+		ret = parse_command(c->cmd2, level + 1, father);
 
 		break;
 
@@ -221,11 +221,11 @@ int parse_command(command_t *c, int level, command_t *father)
 		 * returns non zero.
 		 */
 
-        ret = parse_command(c->cmd1, level + 1, c);
+		ret = parse_command(c->cmd1, level + 1, c);
 
-        if (ret != 0) {
-            ret = parse_command(c->cmd2, level + 1, c);
-        }
+		if (ret != 0) {
+			ret = parse_command(c->cmd2, level + 1, c);
+		}
 
 		break;
 
@@ -234,11 +234,11 @@ int parse_command(command_t *c, int level, command_t *father)
 		 * returns zero.
 		 */
 
-        ret = parse_command(c->cmd1, level + 1, c);
+		ret = parse_command(c->cmd1, level + 1, c);
 
-        if (ret == 0) {
-            ret = parse_command(c->cmd2, level + 1, c);
-        }
+		if (ret == 0) {
+			ret = parse_command(c->cmd2, level + 1, c);
+		}
 
 		break;
 
