@@ -150,6 +150,8 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
         free(argv);
     }
+
+    return ret;
 }
 
 /**
@@ -191,6 +193,11 @@ int parse_command(command_t *c, int level, command_t *father)
 	switch (c->op) {
 	case OP_SEQUENTIAL:
 		/* TODO: Execute the commands one after the other. */
+
+        parse_command(c->cmd1, level + 1, c);
+
+        ret = parse_command(c->cmd2, level + 1, father);
+
 		break;
 
 	case OP_PARALLEL:
@@ -201,12 +208,26 @@ int parse_command(command_t *c, int level, command_t *father)
 		/* TODO: Execute the second command only if the first one
 		 * returns non zero.
 		 */
+
+        ret = parse_command(c->cmd1, level + 1, c);
+
+        if (ret != 0) {
+            ret = parse_command(c->cmd2, level + 1, c);
+        }
+
 		break;
 
 	case OP_CONDITIONAL_ZERO:
 		/* TODO: Execute the second command only if the first one
 		 * returns zero.
 		 */
+
+        ret = parse_command(c->cmd1, level + 1, c);
+
+        if (ret == 0) {
+            ret = parse_command(c->cmd2, level + 1, c);
+        }
+
 		break;
 
 	case OP_PIPE:
