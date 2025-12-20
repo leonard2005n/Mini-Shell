@@ -21,7 +21,7 @@ static bool shell_cd(word_t *dir)
 {
 	/* TODO: Execute cd. */
 
-	return 0;
+	return chdir(dir->string);
 }
 
 /**
@@ -60,7 +60,37 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
         return shell_exit();
     }
 
-    
+    if (strcmp(s->verb->string, "cd") == 0) {
+        
+        if (!s->params) {
+            return 0;
+        }
+
+
+        if (s->out) {
+            int fd;
+            if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND) {
+                fd = open(s->out->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+            } else {
+                fd = open(s->out->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
+            }
+            close(fd);
+        }
+
+        int fd = 3;
+
+        if (s->err) {
+
+            if ((s->io_flags & IO_ERR_APPEND) != IO_ERR_APPEND) {
+                fd = open(s->err->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+            } else {
+                fd = open(s->err->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
+            }
+        }
+
+        return shell_cd(s->params);
+    }   
+
     int childpid = fork();
     int ret;
 
@@ -120,8 +150,6 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
         free(argv);
     }
-
-	return ret; /* TODO: Replace with actual exit status. */
 }
 
 /**
