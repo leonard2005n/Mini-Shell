@@ -66,13 +66,12 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
             return 0;
         }
 
-
         if (s->out) {
             int fd;
             if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND) {
                 fd = open(s->out->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
             } else {
-                fd = open(s->out->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
+                fd = open(s->out->string, O_WRONLY | O_APPEND, 0666);
             }
             close(fd);
         }
@@ -89,7 +88,20 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
         }
 
         return shell_cd(s->params);
-    }   
+    }
+
+    char *command = get_word(s->verb);
+
+    if (strchr(command, '=')) {
+
+        char *word = get_word(s->verb->next_part->next_part);
+        setenv(s->verb->string, word, 1);
+        free(word);
+        free(command);
+        return 0;
+    }
+
+    free(command);
 
     int childpid = fork();
     int ret;
