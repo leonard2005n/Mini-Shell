@@ -3,10 +3,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-
+#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
-
+#include <stdio.h>
+#include <stdlib.h>
 #include "cmd.h"
 #include "utils.h"
 
@@ -30,7 +31,7 @@ static int shell_exit(void)
 {
 	/* TODO: Execute exit/quit. */
 
-	return 0; /* TODO: Replace with actual exit code. */
+	return SHELL_EXIT; /* TODO: Replace with actual exit code. */
 }
 
 /**
@@ -55,7 +56,72 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	 *   3. Return exit status
 	 */
 
-	return 0; /* TODO: Replace with actual exit status. */
+    if (strcmp(s->verb->string, "exit") == 0) {
+        return shell_exit();
+    }
+
+    
+    int childpid = fork();
+    int ret;
+
+    int size = 0;
+    char **argv = get_argv(s, &size);
+
+    if (childpid == 0) {
+        
+        if (s->out) {
+            int fd;
+            if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND) {
+                fd = open(s->out->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+            } else {
+                fd = open(s->out->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
+            }
+
+            dup2(fd, 1);
+            close(fd);
+        }
+
+        if (s->in) {
+            int fd = open(s->in->string, O_RDONLY, 0666);
+
+            dup2(fd, 0);
+            close(fd);
+        }
+
+        if (s->err) {
+            int fd;
+
+            if (s->out != NULL && strcmp(s->out->string, s->err->string) == 0) {
+                fd = 1;
+            } else if ((s->io_flags & IO_ERR_APPEND) != IO_ERR_APPEND) {
+                fd = open(s->err->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+            } else {
+                fd = open(s->err->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
+            }
+
+            dup2(fd, 2);
+
+            if (!(s->out != NULL && strcmp(s->out->string, s->err->string) == 0)) {
+                close(fd);
+            }
+        }
+
+        execvp(s->verb->string, argv);
+    } else {
+        int status;
+        waitpid(childpid, &status, 0);
+
+        if (WIFEXITED(status))
+            ret = WEXITSTATUS(status);
+
+        for (int i = 0; i < size; i++) {
+            free(argv[i]);
+        }
+
+        free(argv);
+    }
+
+	return ret; /* TODO: Replace with actual exit status. */
 }
 
 /**
@@ -86,11 +152,12 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 int parse_command(command_t *c, int level, command_t *father)
 {
 	/* TODO: sanity checks */
+    int ret;
 
 	if (c->op == OP_NONE) {
 		/* TODO: Execute a simple command. */
-
-		return 0; /* TODO: Replace with actual exit code of command. */
+		ret = parse_simple(c->scmd, level, father);
+        return ret;
 	}
 
 	switch (c->op) {
@@ -124,5 +191,5 @@ int parse_command(command_t *c, int level, command_t *father)
 		return SHELL_EXIT;
 	}
 
-	return 0; /* TODO: Replace with actual exit code of command. */
+	return ret; /* TODO: Replace with actual exit code of command. */
 }
