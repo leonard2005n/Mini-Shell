@@ -56,7 +56,7 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	 *   3. Return exit status
 	 */
 
-	if (strcmp(s->verb->string, "exit") == 0) {
+	if (strcmp(s->verb->string, "exit") == 0 || strcmp(s->verb->string, "quit") == 0) {
 		return shell_exit();
 	}
 
@@ -157,6 +157,9 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 		}
 
 		execvp(s->verb->string, argv);
+
+		fprintf(stdout, "Execution failed for '%s'\n", s->verb->string);
+		exit(-1);
 	} else {
 		int status;
 		waitpid(childpid, &status, 0);
