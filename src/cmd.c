@@ -113,19 +113,25 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
 		if (s->out) {
 			int fd;
+
+			char *file_name = get_word(s->out);
 			if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND) {
-				fd = open(s->out->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+				fd = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 			} else {
-				fd = open(s->out->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
+				fd = open(file_name, O_WRONLY | O_APPEND | O_CREAT, 0666);
 			}
 
+			free(file_name);
 			dup2(fd, 1);
 			close(fd);
 		}
 
 		if (s->in) {
-			int fd = open(s->in->string, O_RDONLY, 0666);
 
+			char *file_name = get_word(s->in);
+			int fd = open(file_name, O_RDONLY, 0666);
+
+			free(file_name);
 			dup2(fd, 0);
 			close(fd);
 		}
@@ -133,14 +139,16 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 		if (s->err) {
 			int fd;
 
+			char *file_name = get_word(s->err);
 			if (s->out != NULL && strcmp(s->out->string, s->err->string) == 0) {
 				fd = 1;
 			} else if ((s->io_flags & IO_ERR_APPEND) != IO_ERR_APPEND) {
-				fd = open(s->err->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+				fd = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 			} else {
-				fd = open(s->err->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
+				fd = open(file_name, O_WRONLY | O_APPEND | O_CREAT, 0666);
 			}
 
+			free(file_name);
 			dup2(fd, 2);
 
 			if (!(s->out != NULL && strcmp(s->out->string, s->err->string) == 0)) {
@@ -185,7 +193,49 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 {
 	/* TODO: Redirect the output of cmd1 to the input of cmd2. */
 
-	return true; /* TODO: Replace with actual exit status. */
+	int ret;
+	int fd[2];
+	pipe(fd);
+
+	int childpid1 = fork();
+	
+	if (childpid1 == 0) {
+		close(fd[0]);
+
+
+		dup2(fd[1], 1);
+		ret = parse_command(cmd1, level + 1, father);
+		close(fd[1]);
+		
+		exit(ret);
+	} else {
+
+		int status;
+		int childpid2 = fork();
+
+		if (childpid2 == 0) {
+			close(fd[1]);
+
+
+			dup2(fd[0], 0);
+			ret = parse_command(cmd2, level + 1, father);
+			close(fd[0]);
+			exit(ret);
+		}
+
+		close(fd[0]);
+		close(fd[1]);
+
+		waitpid(childpid1, &status, 0);
+		waitpid(childpid2, &status, 0);
+
+		if (WIFEXITED(status))
+			ret = WEXITSTATUS(status);
+
+	}
+	
+
+	return ret; /* TODO: Replace with actual exit status. */
 }
 
 /**
@@ -208,7 +258,7 @@ int parse_command(command_t *c, int level, command_t *father)
 
 		parse_command(c->cmd1, level + 1, c);
 
-		ret = parse_command(c->cmd2, level + 1, father);
+		ret = parse_command(c->cmd2, level + 1, c);
 
 		break;
 
@@ -246,6 +296,9 @@ int parse_command(command_t *c, int level, command_t *father)
 		/* TODO: Redirect the output of the first command to the
 		 * input of the second.
 		 */
+
+		ret = run_on_pipe(c->cmd1, c->cmd2, level, c);
+		
 		break;
 
 	default:
