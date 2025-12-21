@@ -180,9 +180,31 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 static bool run_in_parallel(command_t *cmd1, command_t *cmd2, int level,
 		command_t *father)
 {
-	/* TODO: Execute cmd1 and cmd2 simultaneously. */
+	/* TODO: Execute cmd1 and cmd2 simultaneously. */\
 
-	return true; /* TODO: Replace with actual exit status. */
+	int ret;
+
+	int childpid = fork();
+
+	if (childpid == 0) {
+		ret = parse_command(cmd1, level + 1, father);
+		exit(ret);
+	} else {
+		int status;
+
+		childpid = fork();
+
+		if (childpid == 0) {
+			ret = parse_command(cmd2, level + 1, father);
+			exit(ret);
+		}
+
+		waitpid(childpid, &status, 0);
+		if (WIFEXITED(status))
+			ret = WEXITSTATUS(status);
+	}
+
+	return ret; /* TODO: Replace with actual exit status. */
 }
 
 /**
@@ -264,6 +286,9 @@ int parse_command(command_t *c, int level, command_t *father)
 
 	case OP_PARALLEL:
 		/* TODO: Execute the commands simultaneously. */
+
+		ret = run_in_parallel(c->cmd1, c->cmd2, level, c);
+
 		break;
 
 	case OP_CONDITIONAL_NZERO:
