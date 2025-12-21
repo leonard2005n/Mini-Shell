@@ -56,35 +56,21 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	 *   3. Return exit status
 	 */
 
-	if (strcmp(s->verb->string, "exit") == 0 || strcmp(s->verb->string, "quit") == 0) {
+	if (strcmp(s->verb->string, "exit") == 0 || strcmp(s->verb->string, "quit") == 0)
 		return shell_exit();
-	}
 
 	if (strcmp(s->verb->string, "cd") == 0) {
-
-		if (!s->params) {
+		if (!s->params)
 			return 0;
-		}
 
 		if (s->out) {
 			int fd;
-			if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND) {
+
+			if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND)
 				fd = open(s->out->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-			} else {
+			else
 				fd = open(s->out->string, O_WRONLY | O_APPEND, 0666);
-			}
 			close(fd);
-		}
-
-		int fd = 3;
-
-		if (s->err) {
-
-			if ((s->io_flags & IO_ERR_APPEND) != IO_ERR_APPEND) {
-				fd = open(s->err->string, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-			} else {
-				fd = open(s->err->string, O_WRONLY | O_APPEND | O_CREAT, 0666);
-			}
 		}
 
 		return shell_cd(s->params);
@@ -93,8 +79,8 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	char *command = get_word(s->verb);
 
 	if (strchr(command, '=')) {
-
 		char *word = get_word(s->verb->next_part->next_part);
+
 		setenv(s->verb->string, word, 1);
 		free(word);
 		free(command);
@@ -110,16 +96,14 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	char **argv = get_argv(s, &size);
 
 	if (childpid == 0) {
-
 		if (s->out) {
 			int fd;
-
 			char *file_name = get_word(s->out);
-			if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND) {
+
+			if ((s->io_flags & IO_OUT_APPEND) != IO_OUT_APPEND)
 				fd = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-			} else {
+			else
 				fd = open(file_name, O_WRONLY | O_APPEND | O_CREAT, 0666);
-			}
 
 			free(file_name);
 			dup2(fd, 1);
@@ -127,7 +111,6 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 		}
 
 		if (s->in) {
-
 			char *file_name = get_word(s->in);
 			int fd = open(file_name, O_RDONLY, 0666);
 
@@ -138,38 +121,35 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
 		if (s->err) {
 			int fd;
-
 			char *file_name = get_word(s->err);
-			if (s->out != NULL && strcmp(s->out->string, s->err->string) == 0) {
+
+			if (s->out != NULL && strcmp(s->out->string, s->err->string) == 0)
 				fd = 1;
-			} else if ((s->io_flags & IO_ERR_APPEND) != IO_ERR_APPEND) {
+			else if ((s->io_flags & IO_ERR_APPEND) != IO_ERR_APPEND)
 				fd = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-			} else {
+			else
 				fd = open(file_name, O_WRONLY | O_APPEND | O_CREAT, 0666);
-			}
 
 			free(file_name);
 			dup2(fd, 2);
 
-			if (!(s->out != NULL && strcmp(s->out->string, s->err->string) == 0)) {
+			if (!(s->out != NULL && strcmp(s->out->string, s->err->string) == 0))
 				close(fd);
-			}
 		}
 
 		execvp(s->verb->string, argv);
-
 		fprintf(stdout, "Execution failed for '%s'\n", s->verb->string);
 		exit(-1);
 	} else {
 		int status;
+
 		waitpid(childpid, &status, 0);
 
 		if (WIFEXITED(status))
 			ret = WEXITSTATUS(status);
 
-		for (int i = 0; i < size; i++) {
+		for (int i = 0; i < size; i++)
 			free(argv[i]);
-		}
 
 		free(argv);
 	}
@@ -183,7 +163,7 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 static bool run_in_parallel(command_t *cmd1, command_t *cmd2, int level,
 		command_t *father)
 {
-	/* TODO: Execute cmd1 and cmd2 simultaneously. */\
+	/* TODO: Execute cmd1 and cmd2 simultaneously. */
 
 	int ret;
 
@@ -220,10 +200,11 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 
 	int ret;
 	int fd[2];
+
 	pipe(fd);
 
 	int childpid1 = fork();
-	
+
 	if (childpid1 == 0) {
 		close(fd[0]);
 
@@ -231,16 +212,14 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 		dup2(fd[1], 1);
 		ret = parse_command(cmd1, level + 1, father);
 		close(fd[1]);
-		
+
 		exit(ret);
 	} else {
-
 		int status;
 		int childpid2 = fork();
 
 		if (childpid2 == 0) {
 			close(fd[1]);
-
 
 			dup2(fd[0], 0);
 			ret = parse_command(cmd2, level + 1, father);
@@ -256,9 +235,7 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 
 		if (WIFEXITED(status))
 			ret = WEXITSTATUS(status);
-
 	}
-	
 
 	return ret; /* TODO: Replace with actual exit status. */
 }
@@ -301,9 +278,9 @@ int parse_command(command_t *c, int level, command_t *father)
 
 		ret = parse_command(c->cmd1, level + 1, c);
 
-		if (ret != 0) {
+		if (ret != 0)
 			ret = parse_command(c->cmd2, level + 1, c);
-		}
+
 
 		break;
 
@@ -314,9 +291,9 @@ int parse_command(command_t *c, int level, command_t *father)
 
 		ret = parse_command(c->cmd1, level + 1, c);
 
-		if (ret == 0) {
+		if (ret == 0)
 			ret = parse_command(c->cmd2, level + 1, c);
-		}
+
 
 		break;
 
@@ -326,7 +303,7 @@ int parse_command(command_t *c, int level, command_t *father)
 		 */
 
 		ret = run_on_pipe(c->cmd1, c->cmd2, level, c);
-		
+
 		break;
 
 	default:
